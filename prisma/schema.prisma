@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("USER") // ADMIN, USER
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  companies CompanyUser[]
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  cin         String?  @unique
+  gstin       String?
+  pan         String?
+  dateOfIncorporation DateTime?
+  registeredOffice    String?
+  companyType         String?  // Private, Public, OPC, LLP
+  companyStatus       String?  // Active, Dormant, Struck Off
+  authorizedCapital   String?
+  paidUpCapital       String?
+  state               String?
+  city                String?
+  email               String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       CompanyUser[]
+  mcaFilings  MCAFiling[]
+  gstReturns  GSTReturn[]
+  complianceChecks ComplianceCheck[]
+  directors   Director[]
+  charges     Charge[]
+}
+
+model CompanyUser {
+  id        String  @id @default(cuid())
+  userId    String
+  companyId String
+  role      String  @default("VIEWER") // OWNER, MANAGER, VIEWER
+  user      User    @relation(fields: [userId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id])
+  @@unique([userId, companyId])
+}
+
+model Director {
+  id          String   @id @default(cuid())
+  companyId   String
+  din         String?
+  name        String
+  designation String?
+  dateOfAppointment DateTime?
+  cessationDate     DateTime?
+  kycStatus   String?  // Compliant, Non-Compliant, Pending
+  company     Company  @relation(fields: [companyId], references: [id])
+}
+
+model MCAFiling {
+  id          String   @id @default(cuid())
+  companyId   String
+  formType    String   // AOC-4, MGT-7, ADT-1, DIR-3 KYC, etc.
+  formName    String
+  filingDate  DateTime?
+  dueDate     DateTime?
+  status      String   // Filed, Pending, Overdue, Not Applicable
+  financialYear String?
+  details     String?
+  penalty     String?
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model GSTReturn {
+  id          String   @id @default(cuid())
+  companyId   String
+  returnType  String   // GSTR-1, GSTR-3B, GSTR-9, GSTR-9C
+  period      String   // e.g., "Jan 2026", "FY 2025-26"
+  dueDate     DateTime?
+  filingDate  DateTime?
+  status      String   // Filed, Pending, Overdue, Not Applicable
+  taxPaid     Float?
+  lateFee     Float?
+  details     String?
+  company     Company  @relation(fields: [companyId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model ComplianceCheck {
+  id          String   @id @default(cuid())
+  companyId   String
+  category    String   // MCA, GST
+  checkName   String
+  description String
+  status      String   // COMPLIANT, NON_COMPLIANT, ATTENTION, NOT_CHECKED
+  severity    String   // HIGH, MEDIUM, LOW
+  action      String?  // Recommended action
+  deadline    DateTime?
+  penalty     String?  // Penalty description
+  reference   String?  // Law/section reference
+  company     Company  @relation(fields: [companyId], references: [id])
+  checkedAt   DateTime @default(now())
+}
+
+model Charge {
+  id          String   @id @default(cuid())
+  companyId   String
+  chargeId    String?
+  chargeHolder String?
+  dateOfCreation DateTime?
+  dateOfModification DateTime?
+  status      String?  // Open, Satisfied, Partially Satisfied
+  amount      String?
+  company     Company  @relation(fields: [companyId], references: [id])
+}
