@@ -89,21 +89,30 @@ export async function POST(req: NextRequest) {
   const gstChecks = generateGSTComplianceChecks(gstData, company.gstReturns)
   const allChecks = [...mcaChecks, ...gstChecks]
 
-  // Delete old checks and save new ones
+  // Get existing overrides
+  const overrides = await prisma.complianceOverride.findMany({
+    where: { companyId },
+  })
+  const overrideMap = new Map(overrides.map(o => [o.checkName, o]))
+
+  // Delete old checks and save new ones (applying overrides)
   await prisma.complianceCheck.deleteMany({ where: { companyId } })
   await prisma.complianceCheck.createMany({
-    data: allChecks.map(check => ({
-      companyId,
-      category: check.category,
-      checkName: check.checkName,
-      description: check.description,
-      status: check.status,
-      severity: check.severity,
-      action: check.action || null,
-      deadline: check.deadline || null,
-      penalty: check.penalty || null,
-      reference: check.reference || null,
-    })),
+    data: allChecks.map(check => {
+      const override = overrideMap.get(check.checkName)
+      return {
+        companyId,
+        category: check.category,
+        checkName: check.checkName,
+        description: check.description,
+        status: override ? override.status : check.status,
+        severity: check.severity,
+        action: override ? `[Manually verified] ${override.notes || ''}` : (check.action || null),
+        deadline: check.deadline || null,
+        penalty: check.penalty || null,
+        reference: check.reference || null,
+      }
+    }),
   })
 
   // Update company GST status if fetched
@@ -135,6 +144,62 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     checks: savedChecks,
+    summary: { total, compliant, nonCompliant, attention, notVerified, score },
+  })
+}
+
+// Manual override - mark check as verified/compliant
+export async function PUT(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { checkId, status, notes } = await req.json()
+  if (!checkId || !status) return NextResponse.json({ error: 'Check ID and status required' }, { status: 400 })
+
+  const userId = (session.user as any).id
+
+  // Get the check to find companyId
+  const check = await prisma.complianceCheck.findUnique({ where: { id: checkId } })
+  if (!check) return NextResponse.json({ error: 'Check not found' }, { status: 404 })
+
+  // Verify access
+  const access = await prisma.companyUser.findUnique({
+    where: { userId_companyId: { userId, companyId: check.companyId } },
+  })
+  if (!access) return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+
+  // Save override (persists across check regeneration)
+  await prisma.complianceOverride.upsert({
+    where: { companyId_checkName: { companyId: check.companyId, checkName: check.checkName } },
+    update: { status, notes, verifiedAt: new Date() },
+    create: { companyId: check.companyId, checkName: check.checkName, status, notes },
+  })
+
+  // Update the check itself
+  await prisma.complianceCheck.update({
+    where: { id: checkId },
+    data: {
+      status,
+      action: `[Manually verified] ${notes || ''}`,
+    },
+  })
+
+  // Return updated checks
+  const checks = await prisma.complianceCheck.findMany({
+    where: { companyId: check.companyId },
+    orderBy: [{ severity: 'asc' }, { status: 'asc' }],
+  })
+
+  const total = checks.length
+  const compliant = checks.filter(c => c.status === 'COMPLIANT').length
+  const nonCompliant = checks.filter(c => c.status === 'NON_COMPLIANT').length
+  const attention = checks.filter(c => c.status === 'ATTENTION').length
+  const notVerified = checks.filter(c => c.status === 'NOT_VERIFIED').length
+  const verifiedTotal = total - notVerified
+  const score = verifiedTotal > 0 ? Math.round((compliant / verifiedTotal) * 100) : 0
+
+  return NextResponse.json({
+    checks,
     summary: { total, compliant, nonCompliant, attention, notVerified, score },
   })
 }

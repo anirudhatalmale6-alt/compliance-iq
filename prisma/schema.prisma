@@ -47,6 +47,7 @@ model Company {
   complianceChecks ComplianceCheck[]
   directors   Director[]
   charges     Charge[]
+  complianceOverrides ComplianceOverride[]
   @@schema("compliance")
 }
 
@@ -133,5 +134,17 @@ model Charge {
   status      String?
   amount      String?
   company     Company  @relation(fields: [companyId], references: [id])
+  @@schema("compliance")
+}
+
+model ComplianceOverride {
+  id          String   @id @default(cuid())
+  companyId   String
+  checkName   String
+  status      String
+  notes       String?
+  verifiedAt  DateTime @default(now())
+  company     Company  @relation(fields: [companyId], references: [id])
+  @@unique([companyId, checkName])
   @@schema("compliance")
 }

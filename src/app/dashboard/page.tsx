@@ -53,6 +53,9 @@ export default function DashboardPage() {
   const [expandedCheck, setExpandedCheck] = useState<string | null>(null)
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [verifyingCheck, setVerifyingCheck] = useState<string | null>(null)
+  const [verifyNote, setVerifyNote] = useState('')
+  const [verifyStatus, setVerifyStatus] = useState('COMPLIANT')
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -114,6 +117,22 @@ export default function DashboardPage() {
     setShowAddCompany(false)
     setAddForm({ cin: '', gstin: '', name: '' })
     fetchCompanies()
+  }
+
+  async function manualVerify(checkId: string) {
+    const res = await fetch('/api/compliance', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkId, status: verifyStatus, notes: verifyNote }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setChecks(data.checks)
+      setSummary(data.summary)
+      setVerifyingCheck(null)
+      setVerifyNote('')
+      setVerifyStatus('COMPLIANT')
+    }
   }
 
   function selectCompany(company: Company) {
@@ -398,6 +417,45 @@ export default function DashboardPage() {
                         <div>
                           <h4 className="text-sm font-semibold text-amber-400 mb-1.5">Deadline</h4>
                           <p className="text-sm text-slate-300">{new Date(check.deadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        </div>
+                      )}
+
+                      {/* Manual Verification */}
+                      {check.status !== 'COMPLIANT' && (
+                        <div className="border-t border-white/5 pt-4">
+                          {verifyingCheck === check.id ? (
+                            <div className="space-y-3" onClick={e => e.stopPropagation()}>
+                              <div className="flex gap-3">
+                                <select value={verifyStatus} onChange={e => setVerifyStatus(e.target.value)}
+                                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none">
+                                  <option value="COMPLIANT" className="bg-slate-900">Mark as Compliant</option>
+                                  <option value="ATTENTION" className="bg-slate-900">Needs Attention</option>
+                                  <option value="NON_COMPLIANT" className="bg-slate-900">Non-Compliant</option>
+                                </select>
+                              </div>
+                              <input type="text" value={verifyNote} onChange={e => setVerifyNote(e.target.value)}
+                                placeholder="Add verification notes (e.g., 'Filed on GST portal on 15 Feb')"
+                                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-emerald-500/50" />
+                              <div className="flex gap-2">
+                                <button onClick={(e) => { e.stopPropagation(); manualVerify(check.id) }}
+                                  className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-sm rounded-lg hover:bg-emerald-500/30 transition">
+                                  Confirm
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); setVerifyingCheck(null) }}
+                                  className="px-4 py-2 bg-white/5 border border-white/10 text-slate-400 text-sm rounded-lg hover:bg-white/10 transition">
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); setVerifyingCheck(check.id); setVerifyNote(''); setVerifyStatus('COMPLIANT') }}
+                              className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-lg hover:bg-emerald-500/20 transition flex items-center gap-2">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Mark as Verified
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
