@@ -209,8 +209,47 @@ function parseToflerResponse(cin: string, html: string): MCACompanyData | null {
   return data.name ? data : null
 }
 
-// Fetch company data - tries Tofler first, then fallbacks
-export async function fetchMCAData(cin: string): Promise<MCACompanyData | null> {
+// Decode CIN to extract company data without any API call
+function decodeCIN(cin: string, companyName?: string): MCACompanyData {
+  const stateMap: Record<string, string> = {
+    'AN': 'Andaman and Nicobar', 'AP': 'Andhra Pradesh', 'AR': 'Arunachal Pradesh',
+    'AS': 'Assam', 'BR': 'Bihar', 'CH': 'Chandigarh', 'CT': 'Chhattisgarh',
+    'DD': 'Dadra and Nagar Haveli', 'DL': 'Delhi', 'GA': 'Goa', 'GJ': 'Gujarat',
+    'HP': 'Himachal Pradesh', 'HR': 'Haryana', 'JH': 'Jharkhand',
+    'JK': 'Jammu and Kashmir', 'KA': 'Karnataka', 'KL': 'Kerala',
+    'LA': 'Ladakh', 'MH': 'Maharashtra', 'ML': 'Meghalaya', 'MN': 'Manipur',
+    'MP': 'Madhya Pradesh', 'MZ': 'Mizoram', 'NL': 'Nagaland',
+    'OR': 'Odisha', 'PB': 'Punjab', 'PY': 'Puducherry', 'RJ': 'Rajasthan',
+    'SK': 'Sikkim', 'TN': 'Tamil Nadu', 'TR': 'Tripura', 'TS': 'Telangana',
+    'UK': 'Uttarakhand', 'UP': 'Uttar Pradesh', 'WB': 'West Bengal',
+  }
+  const typeMap: Record<string, string> = {
+    'PTC': 'Private Limited Company', 'PLC': 'Public Limited Company',
+    'OPC': 'One Person Company', 'GAP': 'Company limited by Guarantee',
+    'GAT': 'Company limited by Guarantee', 'ULL': 'Unlimited Company',
+    'ULT': 'Unlimited Company', 'FTC': 'Foreign Company',
+    'NPT': 'Section 8 Company (Not-for-Profit)',
+  }
+
+  const stateCode = cin.substring(6, 8)
+  const year = cin.substring(8, 12)
+  const typeCode = cin.substring(12, 15)
+
+  return {
+    cin,
+    name: companyName || '',
+    companyStatus: 'Active', // Default: assume active since user is adding it
+    companyType: typeMap[typeCode] || typeCode,
+    state: stateMap[stateCode] || stateCode,
+    dateOfIncorporation: `${year}-01-01`, // Year from CIN, Jan 1 as placeholder
+    directors: [],
+    charges: [],
+    filings: [],
+  }
+}
+
+// Fetch company data - tries Tofler first, then data.gov.in, then CIN decoder
+export async function fetchMCAData(cin: string, companyName?: string): Promise<MCACompanyData> {
   // Try Tofler (most reliable free source)
   try {
     const toflerData = await fetchFromTofler(cin)
@@ -240,7 +279,7 @@ export async function fetchMCAData(cin: string): Promise<MCACompanyData | null> 
       const record = response.data.records[0]
       return {
         cin,
-        name: record.companyName || '',
+        name: record.companyName || companyName || '',
         dateOfIncorporation: record.dateOfIncorporation,
         registeredOffice: record.registeredOfficeAddress,
         companyType: record.companyClass,
@@ -258,7 +297,9 @@ export async function fetchMCAData(cin: string): Promise<MCACompanyData | null> 
     console.log('data.gov.in API failed')
   }
 
-  return null
+  // Final fallback: CIN decoder - always returns data
+  console.log(`Using CIN decoder for ${cin}`)
+  return decodeCIN(cin, companyName)
 }
 
 // Generate MCA compliance checks for a company

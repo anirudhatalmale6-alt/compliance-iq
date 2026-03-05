@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fetch data from MCA if CIN provided
+  // Fetch data from MCA if CIN provided (always returns data via CIN decoder fallback)
   let mcaData = null
   if (cin) {
-    mcaData = await fetchMCAData(cin)
+    mcaData = await fetchMCAData(cin, name)
   }
 
   // Fetch data from GST if GSTIN provided

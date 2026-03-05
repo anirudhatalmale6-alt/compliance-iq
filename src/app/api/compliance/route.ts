@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   // Fetch fresh MCA data from Tofler if CIN exists
   let enrichedCompany: any = { ...company }
   if (company.cin) {
-    const mcaData = await fetchMCAData(company.cin)
+    const mcaData = await fetchMCAData(company.cin, company.name)
     if (mcaData) {
       enrichedCompany = {
         ...company,
