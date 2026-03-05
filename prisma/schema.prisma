@@ -1,11 +1,13 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider  = "postgresql"
   url       = env("POSTGRES_PRISMA_URL")
   directUrl = env("POSTGRES_URL_NON_POOLING")
+  schemas   = ["compliance"]
 }
 
 model User {
@@ -13,11 +15,12 @@ model User {
   email     String   @unique
   password  String
   name      String
-  role      String   @default("USER") // ADMIN, USER
+  role      String   @default("USER")
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   companies CompanyUser[]
+  @@schema("compliance")
 }
 
 model Company {
@@ -28,8 +31,8 @@ model Company {
   pan         String?
   dateOfIncorporation DateTime?
   registeredOffice    String?
-  companyType         String?  // Private, Public, OPC, LLP
-  companyStatus       String?  // Active, Dormant, Struck Off
+  companyType         String?
+  companyStatus       String?
   authorizedCapital   String?
   paidUpCapital       String?
   state               String?
@@ -43,16 +46,18 @@ model Company {
   complianceChecks ComplianceCheck[]
   directors   Director[]
   charges     Charge[]
+  @@schema("compliance")
 }
 
 model CompanyUser {
   id        String  @id @default(cuid())
   userId    String
   companyId String
-  role      String  @default("VIEWER") // OWNER, MANAGER, VIEWER
+  role      String  @default("VIEWER")
   user      User    @relation(fields: [userId], references: [id])
   company   Company @relation(fields: [companyId], references: [id])
   @@unique([userId, companyId])
+  @@schema("compliance")
 }
 
 model Director {
@@ -63,54 +68,58 @@ model Director {
   designation String?
   dateOfAppointment DateTime?
   cessationDate     DateTime?
-  kycStatus   String?  // Compliant, Non-Compliant, Pending
+  kycStatus   String?
   company     Company  @relation(fields: [companyId], references: [id])
+  @@schema("compliance")
 }
 
 model MCAFiling {
   id          String   @id @default(cuid())
   companyId   String
-  formType    String   // AOC-4, MGT-7, ADT-1, DIR-3 KYC, etc.
+  formType    String
   formName    String
   filingDate  DateTime?
   dueDate     DateTime?
-  status      String   // Filed, Pending, Overdue, Not Applicable
+  status      String
   financialYear String?
   details     String?
   penalty     String?
   company     Company  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
+  @@schema("compliance")
 }
 
 model GSTReturn {
   id          String   @id @default(cuid())
   companyId   String
-  returnType  String   // GSTR-1, GSTR-3B, GSTR-9, GSTR-9C
-  period      String   // e.g., "Jan 2026", "FY 2025-26"
+  returnType  String
+  period      String
   dueDate     DateTime?
   filingDate  DateTime?
-  status      String   // Filed, Pending, Overdue, Not Applicable
+  status      String
   taxPaid     Float?
   lateFee     Float?
   details     String?
   company     Company  @relation(fields: [companyId], references: [id])
   createdAt   DateTime @default(now())
+  @@schema("compliance")
 }
 
 model ComplianceCheck {
   id          String   @id @default(cuid())
   companyId   String
-  category    String   // MCA, GST
+  category    String
   checkName   String
   description String
-  status      String   // COMPLIANT, NON_COMPLIANT, ATTENTION, NOT_CHECKED
-  severity    String   // HIGH, MEDIUM, LOW
-  action      String?  // Recommended action
+  status      String
+  severity    String
+  action      String?
   deadline    DateTime?
-  penalty     String?  // Penalty description
-  reference   String?  // Law/section reference
+  penalty     String?
+  reference   String?
   company     Company  @relation(fields: [companyId], references: [id])
   checkedAt   DateTime @default(now())
+  @@schema("compliance")
 }
 
 model Charge {
@@ -120,7 +129,8 @@ model Charge {
   chargeHolder String?
   dateOfCreation DateTime?
   dateOfModification DateTime?
-  status      String?  // Open, Satisfied, Partially Satisfied
+  status      String?
   amount      String?
   company     Company  @relation(fields: [companyId], references: [id])
+  @@schema("compliance")
 }
