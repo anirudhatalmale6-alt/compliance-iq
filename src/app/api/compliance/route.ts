@@ -85,11 +85,13 @@ export async function POST(req: NextRequest) {
   const compliant = savedChecks.filter(c => c.status === 'COMPLIANT').length
   const nonCompliant = savedChecks.filter(c => c.status === 'NON_COMPLIANT').length
   const attention = savedChecks.filter(c => c.status === 'ATTENTION').length
-  const score = total > 0 ? Math.round((compliant / total) * 100) : 0
+  const notVerified = savedChecks.filter(c => c.status === 'NOT_VERIFIED').length
+  const verifiedTotal = total - notVerified
+  const score = verifiedTotal > 0 ? Math.round((compliant / verifiedTotal) * 100) : 0
 
   return NextResponse.json({
     checks: savedChecks,
-    summary: { total, compliant, nonCompliant, attention, score },
+    summary: { total, compliant, nonCompliant, attention, notVerified, score },
   })
 }
 
@@ -116,10 +118,12 @@ export async function GET(req: NextRequest) {
   const compliant = checks.filter(c => c.status === 'COMPLIANT').length
   const nonCompliant = checks.filter(c => c.status === 'NON_COMPLIANT').length
   const attention = checks.filter(c => c.status === 'ATTENTION').length
-  const score = total > 0 ? Math.round((compliant / total) * 100) : 0
+  const notVerified = checks.filter(c => c.status === 'NOT_VERIFIED').length
+  const verifiedTotal = total - notVerified
+  const score = verifiedTotal > 0 ? Math.round((compliant / verifiedTotal) * 100) : 0
 
   return NextResponse.json({
     checks,
-    summary: { total, compliant, nonCompliant, attention, score },
+    summary: { total, compliant, nonCompliant, attention, notVerified, score },
   })
 }

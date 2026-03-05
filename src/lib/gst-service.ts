@@ -170,6 +170,7 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
 
   // 2. GSTR-1 (Outward Supplies) - Monthly/Quarterly
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const hasFilingData = gstReturns.length > 0 || gstData.filingStatus.length > 0
   for (let i = 1; i <= 3; i++) {
     let checkMonth = currentMonth - i
     let checkYear = currentYear
@@ -182,15 +183,18 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
       f.returnType === 'GSTR1' && f.period?.includes(months[checkMonth]) && f.status?.toLowerCase() === 'filed'
     )
 
+    const gstr1Status = gstr1Filed ? 'COMPLIANT' : !hasFilingData ? 'NOT_VERIFIED' : i === 1 ? 'ATTENTION' : 'NON_COMPLIANT'
     checks.push({
       category: 'GST',
       checkName: `GSTR-1 Filing - ${period}`,
       description: `GSTR-1 (Outward supplies) for ${period}. Due by 11th of next month.`,
-      status: gstr1Filed ? 'COMPLIANT' : i === 1 ? 'ATTENTION' : 'NON_COMPLIANT',
+      status: gstr1Status,
       severity: i <= 1 ? 'MEDIUM' : 'HIGH',
-      action: !gstr1Filed
-        ? `File GSTR-1 for ${period}. Contains details of all outward supplies (sales). Due by 11th of following month.`
-        : `GSTR-1 for ${period} filed. No action needed.`,
+      action: gstr1Status === 'NOT_VERIFIED'
+        ? `Filing data not available from public APIs for ${period}. Please verify on GST portal (gst.gov.in) or provide filing records.`
+        : !gstr1Filed
+          ? `File GSTR-1 for ${period}. Contains details of all outward supplies (sales). Due by 11th of following month.`
+          : `GSTR-1 for ${period} filed. No action needed.`,
       penalty: 'Late fee: ₹50/day (₹25 CGST + ₹25 SGST). Max ₹10,000 per return. Nil return: ₹20/day.',
       reference: 'CGST Act 2017, Section 37',
     })
@@ -209,15 +213,18 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
       f.returnType === 'GSTR3B' && f.period?.includes(months[checkMonth]) && f.status?.toLowerCase() === 'filed'
     )
 
+    const gstr3bStatus = gstr3bFiled ? 'COMPLIANT' : !hasFilingData ? 'NOT_VERIFIED' : i === 1 ? 'ATTENTION' : 'NON_COMPLIANT'
     checks.push({
       category: 'GST',
       checkName: `GSTR-3B Filing - ${period}`,
       description: `GSTR-3B (Summary return with tax payment) for ${period}. Due by 20th of next month.`,
-      status: gstr3bFiled ? 'COMPLIANT' : i === 1 ? 'ATTENTION' : 'NON_COMPLIANT',
+      status: gstr3bStatus,
       severity: 'HIGH',
-      action: !gstr3bFiled
-        ? `File GSTR-3B for ${period}. This is the summary return with actual tax payment. Due by 20th of following month. Interest of 18% p.a. on late payment of tax.`
-        : `GSTR-3B for ${period} filed. No action needed.`,
+      action: gstr3bStatus === 'NOT_VERIFIED'
+        ? `Filing data not available from public APIs for ${period}. Please verify on GST portal (gst.gov.in) or provide filing records.`
+        : !gstr3bFiled
+          ? `File GSTR-3B for ${period}. This is the summary return with actual tax payment. Due by 20th of following month. Interest of 18% p.a. on late payment of tax.`
+          : `GSTR-3B for ${period} filed. No action needed.`,
       penalty: 'Late fee: ₹50/day (₹25 CGST + ₹25 SGST). Max ₹10,000. Plus interest at 18% p.a. on outstanding tax.',
       reference: 'CGST Act 2017, Section 39',
     })
@@ -228,15 +235,18 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
   const gstr9Filed = gstReturns.some(r =>
     r.returnType === 'GSTR-9' && r.period === prevFY && r.status === 'Filed'
   )
+  const gstr9Status = gstr9Filed ? 'COMPLIANT' : !hasFilingData ? 'NOT_VERIFIED' : 'ATTENTION'
   checks.push({
     category: 'GST',
     checkName: `Annual Return (GSTR-9) - ${prevFY}`,
     description: `GSTR-9 annual return for ${prevFY}. Due by December 31.`,
-    status: gstr9Filed ? 'COMPLIANT' : 'ATTENTION',
+    status: gstr9Status,
     severity: 'HIGH',
-    action: !gstr9Filed
-      ? `File GSTR-9 annual return for ${prevFY}. Due by December 31. Reconcile all monthly returns. If turnover exceeds ₹5 crore, GSTR-9C reconciliation statement also required.`
-      : `GSTR-9 for ${prevFY} filed. No action needed.`,
+    action: gstr9Status === 'NOT_VERIFIED'
+      ? `Filing data not available from public APIs for ${prevFY}. Please verify on GST portal (gst.gov.in) or provide filing records.`
+      : !gstr9Filed
+        ? `File GSTR-9 annual return for ${prevFY}. Due by December 31. Reconcile all monthly returns. If turnover exceeds ₹5 crore, GSTR-9C reconciliation statement also required.`
+        : `GSTR-9 for ${prevFY} filed. No action needed.`,
     penalty: 'Late fee: ₹200/day (₹100 CGST + ₹100 SGST). Max 0.5% of turnover in the state.',
     reference: 'CGST Act 2017, Section 44',
     deadline: new Date(currentYear - 1, 11, 31),
@@ -247,9 +257,9 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
     category: 'GST',
     checkName: 'E-Invoice Compliance',
     description: 'Companies with turnover above ₹5 crore must generate e-invoices',
-    status: 'ATTENTION',
+    status: 'NOT_VERIFIED',
     severity: 'MEDIUM',
-    action: 'If aggregate turnover exceeds ₹5 crore in any FY from 2017-18, e-invoicing is mandatory for all B2B supplies. Ensure IRN is generated for every invoice via IRP portal.',
+    action: 'Cannot be verified via public API. If aggregate turnover exceeds ₹5 crore in any FY from 2017-18, e-invoicing is mandatory for all B2B supplies. Ensure IRN is generated for every invoice via IRP portal.',
     penalty: 'Invoice without IRN: 100% of tax due or ₹25,000, whichever is higher.',
     reference: 'CGST Rules, Rule 48(4), Notification 13/2020',
   })
@@ -259,9 +269,9 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
     category: 'GST',
     checkName: 'E-Way Bill Compliance',
     description: 'E-Way bill required for movement of goods exceeding ₹50,000',
-    status: 'ATTENTION',
+    status: 'NOT_VERIFIED',
     severity: 'MEDIUM',
-    action: 'Generate E-Way Bill on ewaybillgst.gov.in for all goods movement above ₹50,000. Valid for distance-based periods. Ensure Part A (invoice details) and Part B (vehicle number) are filled.',
+    action: 'Cannot be verified via public API. Generate E-Way Bill on ewaybillgst.gov.in for all goods movement above ₹50,000. Valid for distance-based periods. Ensure Part A (invoice details) and Part B (vehicle number) are filled.',
     penalty: 'Goods detained + penalty of ₹10,000 or tax amount, whichever is higher.',
     reference: 'CGST Rules, Rule 138',
   })
@@ -271,9 +281,9 @@ export function generateGSTComplianceChecks(gstData: GSTData | null, gstReturns:
     category: 'GST',
     checkName: 'ITC Reconciliation (GSTR-2B)',
     description: 'Input Tax Credit claimed should match auto-populated GSTR-2B',
-    status: 'ATTENTION',
+    status: 'NOT_VERIFIED',
     severity: 'HIGH',
-    action: 'Reconcile ITC claimed in GSTR-3B with auto-populated GSTR-2B every month. Any excess ITC claim needs to be reversed with interest. Ensure all vendors have filed their GSTR-1.',
+    action: 'Cannot be verified via public API. Reconcile ITC claimed in GSTR-3B with auto-populated GSTR-2B every month. Any excess ITC claim needs to be reversed with interest. Ensure all vendors have filed their GSTR-1.',
     penalty: 'Wrong ITC claim: Interest at 24% p.a. + penalty equal to ITC wrongly claimed.',
     reference: 'CGST Act 2017, Section 16(2)',
   })

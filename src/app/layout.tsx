@@ -15,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "ComplianceIQ - Corporate Compliance Portal",
+  title: "Adira - MCA & GST Compliance Intelligence",
   description: "Track MCA & GST compliance for your company. Get actionable insights and stay compliant.",
 };
 

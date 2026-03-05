@@ -180,15 +180,21 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
   const prevFY = `${currentYear - 2}-${currentYear - 1}`
 
   // 1. Company Status Check
+  const companyStatusLower = company.companyStatus?.toLowerCase()
+  const companyStatusResolved = companyStatusLower === 'active' ? 'COMPLIANT'
+    : !company.companyStatus ? 'NOT_VERIFIED'
+    : 'NON_COMPLIANT'
   checks.push({
     category: 'MCA',
     checkName: 'Company Active Status',
     description: 'Company should have Active status on MCA records',
-    status: company.companyStatus?.toLowerCase() === 'active' ? 'COMPLIANT' : 'NON_COMPLIANT',
+    status: companyStatusResolved,
     severity: 'HIGH',
-    action: company.companyStatus?.toLowerCase() !== 'active'
-      ? `Company status is "${company.companyStatus}". File necessary forms to restore active status. Contact ROC office.`
-      : 'Company status is Active. No action needed.',
+    action: companyStatusResolved === 'NOT_VERIFIED'
+      ? 'Company status data not available from public APIs. Please verify manually on MCA portal (mca.gov.in) or provide company master data.'
+      : companyStatusResolved === 'NON_COMPLIANT'
+        ? `Company status is "${company.companyStatus}". File necessary forms to restore active status. Contact ROC office.`
+        : 'Company status is Active. No action needed.',
     penalty: 'Struck off companies face penalty up to ₹1,00,000 and directors disqualified for 5 years.',
     reference: 'Companies Act 2013, Section 248',
   })
@@ -199,15 +205,18 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     (f.financialYear === currentFY || f.financialYear === prevFY) &&
     f.status === 'Filed'
   )
+  const mgt7Status = mgt7Filed ? 'COMPLIANT' : filings.length === 0 ? 'NOT_VERIFIED' : 'ATTENTION'
   checks.push({
     category: 'MCA',
     checkName: 'Annual Return Filing (MGT-7/MGT-7A)',
     description: `Annual return for FY ${prevFY} must be filed within 60 days of AGM`,
-    status: mgt7Filed ? 'COMPLIANT' : 'ATTENTION',
+    status: mgt7Status,
     severity: 'HIGH',
-    action: !mgt7Filed
-      ? `File Form MGT-7 (or MGT-7A for OPC/Small companies) for FY ${prevFY}. Due within 60 days of AGM date. Late filing attracts additional fees of ₹100/day.`
-      : 'Annual return filed. No action needed.',
+    action: mgt7Status === 'NOT_VERIFIED'
+      ? 'Filing data not available from public APIs. Please verify manually on MCA portal or provide filing records.'
+      : !mgt7Filed
+        ? `File Form MGT-7 (or MGT-7A for OPC/Small companies) for FY ${prevFY}. Due within 60 days of AGM date. Late filing attracts additional fees of ₹100/day.`
+        : 'Annual return filed. No action needed.',
     penalty: 'Late filing: ₹100 per day of delay. Non-filing: up to ₹5,00,000 penalty.',
     reference: 'Companies Act 2013, Section 92(4)',
     deadline: new Date(currentYear, 10, 29), // Nov 29
@@ -219,15 +228,18 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     (f.financialYear === currentFY || f.financialYear === prevFY) &&
     f.status === 'Filed'
   )
+  const aoc4Status = aoc4Filed ? 'COMPLIANT' : filings.length === 0 ? 'NOT_VERIFIED' : 'ATTENTION'
   checks.push({
     category: 'MCA',
     checkName: 'Financial Statements Filing (AOC-4)',
     description: `Financial statements for FY ${prevFY} must be filed within 30 days of AGM`,
-    status: aoc4Filed ? 'COMPLIANT' : 'ATTENTION',
+    status: aoc4Status,
     severity: 'HIGH',
-    action: !aoc4Filed
-      ? `File Form AOC-4 for FY ${prevFY}. Due within 30 days of AGM. Ensure Balance Sheet, P&L, Cash Flow Statement, and notes are attached.`
-      : 'Financial statements filed. No action needed.',
+    action: aoc4Status === 'NOT_VERIFIED'
+      ? 'Filing data not available from public APIs. Please verify manually on MCA portal or provide filing records.'
+      : !aoc4Filed
+        ? `File Form AOC-4 for FY ${prevFY}. Due within 30 days of AGM. Ensure Balance Sheet, P&L, Cash Flow Statement, and notes are attached.`
+        : 'Financial statements filed. No action needed.',
     penalty: 'Late filing: ₹100 per day. Company penalty up to ₹5,00,000, Officer penalty up to ₹1,00,000.',
     reference: 'Companies Act 2013, Section 137',
     deadline: new Date(currentYear, 10, 29),
@@ -235,15 +247,18 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
 
   // 4. Auditor Appointment (ADT-1)
   const adt1Filed = filings.some(f => f.formType === 'ADT-1' && f.status === 'Filed')
+  const adt1Status = adt1Filed ? 'COMPLIANT' : filings.length === 0 ? 'NOT_VERIFIED' : 'ATTENTION'
   checks.push({
     category: 'MCA',
     checkName: 'Auditor Appointment (ADT-1)',
     description: 'Statutory auditor must be appointed for 5-year term and intimated to ROC via ADT-1',
-    status: adt1Filed ? 'COMPLIANT' : 'ATTENTION',
+    status: adt1Status,
     severity: 'MEDIUM',
-    action: !adt1Filed
-      ? 'File Form ADT-1 within 15 days of AGM to intimate ROC about auditor appointment. Ensure auditor holds valid membership with ICAI.'
-      : 'Auditor appointment filed. No action needed.',
+    action: adt1Status === 'NOT_VERIFIED'
+      ? 'Filing data not available from public APIs. Please verify manually on MCA portal or provide filing records.'
+      : !adt1Filed
+        ? 'File Form ADT-1 within 15 days of AGM to intimate ROC about auditor appointment. Ensure auditor holds valid membership with ICAI.'
+        : 'Auditor appointment filed. No action needed.',
     penalty: 'Non-appointment: Company penalty ₹25,000 to ₹5,00,000.',
     reference: 'Companies Act 2013, Section 139',
   })
@@ -256,12 +271,12 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     checkName: 'Director KYC (DIR-3 KYC)',
     description: 'All directors must file DIR-3 KYC annually by September 30',
     status: dirKycPending.length === 0 && activeDirectors.length > 0 ? 'COMPLIANT' :
-            activeDirectors.length === 0 ? 'ATTENTION' : 'NON_COMPLIANT',
+            directors.length === 0 ? 'NOT_VERIFIED' : 'NON_COMPLIANT',
     severity: 'HIGH',
-    action: dirKycPending.length > 0
-      ? `${dirKycPending.length} director(s) need to file DIR-3 KYC. Names: ${dirKycPending.map(d => d.name).join(', ')}. Due by September 30 every year. Late fee: ₹5,000.`
-      : activeDirectors.length === 0
-        ? 'No director data available. Verify director details and ensure all have filed DIR-3 KYC.'
+    action: directors.length === 0
+      ? 'Director data not available from public APIs. Please verify manually on MCA portal or provide director details.'
+      : dirKycPending.length > 0
+        ? `${dirKycPending.length} director(s) need to file DIR-3 KYC. Names: ${dirKycPending.map(d => d.name).join(', ')}. Due by September 30 every year. Late fee: ₹5,000.`
         : 'All directors have filed KYC. No action needed.',
     penalty: 'DIN deactivation if KYC not filed. Reactivation fee: ₹5,000.',
     reference: 'Companies Act 2013, Rule 12A of Companies (Appointment and Qualification of Directors) Rules',
@@ -273,10 +288,10 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     category: 'MCA',
     checkName: 'Registered Office Verification',
     description: 'Company must maintain a registered office and display name, address, CIN at the office',
-    status: company.registeredOffice ? 'COMPLIANT' : 'ATTENTION',
+    status: company.registeredOffice ? 'COMPLIANT' : 'NOT_VERIFIED',
     severity: 'MEDIUM',
     action: !company.registeredOffice
-      ? 'Update registered office address with ROC. File INC-22 if changing registered office.'
+      ? 'Registered office data not available from public APIs. Please verify manually on MCA portal or provide company details.'
       : 'Registered office on record. Ensure CIN and company name are displayed at premises.',
     penalty: 'Penalty up to ₹1,000 per day for non-display.',
     reference: 'Companies Act 2013, Section 12',
@@ -289,13 +304,13 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     category: 'MCA',
     checkName: 'Minimum Number of Directors',
     description: `${company.companyType || 'Company'} must have minimum ${minDirectors} director(s)`,
-    status: activeDirectors.length >= minDirectors ? 'COMPLIANT' :
-            activeDirectors.length === 0 ? 'ATTENTION' : 'NON_COMPLIANT',
+    status: directors.length === 0 ? 'NOT_VERIFIED' :
+            activeDirectors.length >= minDirectors ? 'COMPLIANT' : 'NON_COMPLIANT',
     severity: 'HIGH',
-    action: activeDirectors.length < minDirectors && activeDirectors.length > 0
-      ? `Only ${activeDirectors.length} active director(s) found. Minimum ${minDirectors} required. Appoint additional director(s) and file DIR-12.`
-      : activeDirectors.length === 0
-        ? `No director data available. Ensure minimum ${minDirectors} director(s) are appointed.`
+    action: directors.length === 0
+      ? `Director data not available from public APIs. Please verify manually on MCA portal or provide director details. Minimum ${minDirectors} director(s) required.`
+      : activeDirectors.length < minDirectors
+        ? `Only ${activeDirectors.length} active director(s) found. Minimum ${minDirectors} required. Appoint additional director(s) and file DIR-12.`
         : `${activeDirectors.length} active director(s). Minimum requirement met.`,
     penalty: 'Company and every officer in default: penalty up to ₹1,00,000.',
     reference: 'Companies Act 2013, Section 149',
@@ -330,9 +345,9 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     category: 'MCA',
     checkName: 'Annual General Meeting (AGM)',
     description: 'AGM must be held within 6 months from end of financial year (by September 30)',
-    status: 'ATTENTION',
+    status: 'NOT_VERIFIED',
     severity: 'HIGH',
-    action: 'Ensure AGM is conducted by September 30 each year. First AGM within 9 months of closing of first financial year. Gap between two AGMs should not exceed 15 months.',
+    action: 'Cannot be verified via public API. Ensure AGM is conducted by September 30 each year. First AGM within 9 months of closing of first financial year. Gap between two AGMs should not exceed 15 months.',
     penalty: 'Company penalty: ₹1,00,000. Officer penalty: ₹5,000/day.',
     reference: 'Companies Act 2013, Section 96',
     deadline: new Date(currentYear, 8, 30),
@@ -343,9 +358,9 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     category: 'MCA',
     checkName: 'Board Meetings Compliance',
     description: 'Minimum 4 board meetings per year, with gap not exceeding 120 days between consecutive meetings',
-    status: 'ATTENTION',
+    status: 'NOT_VERIFIED',
     severity: 'MEDIUM',
-    action: 'Verify that at least 4 board meetings are held per financial year. Maximum gap between two meetings: 120 days. First meeting within 30 days of incorporation.',
+    action: 'Cannot be verified via public API. Verify that at least 4 board meetings are held per financial year. Maximum gap between two meetings: 120 days. First meeting within 30 days of incorporation.',
     penalty: 'Penalty up to ₹1,00,000 on company and ₹25,000 on every director.',
     reference: 'Companies Act 2013, Section 173',
   })

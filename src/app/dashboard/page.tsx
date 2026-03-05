@@ -33,6 +33,7 @@ interface ComplianceSummary {
   compliant: number
   nonCompliant: number
   attention: number
+  notVerified: number
   score: number
 }
 
@@ -78,8 +79,10 @@ export default function DashboardPage() {
     const compliant = checks.filter(c => c.status === 'COMPLIANT').length
     const nonCompliant = checks.filter(c => c.status === 'NON_COMPLIANT').length
     const attention = checks.filter(c => c.status === 'ATTENTION').length
-    const score = total > 0 ? Math.round((compliant / total) * 100) : 0
-    setSummary({ total, compliant, nonCompliant, attention, score })
+    const notVerified = checks.filter(c => c.status === 'NOT_VERIFIED').length
+    const verifiedTotal = total - notVerified
+    const score = verifiedTotal > 0 ? Math.round((compliant / verifiedTotal) * 100) : 0
+    setSummary({ total, compliant, nonCompliant, attention, notVerified, score })
   }
 
   async function runComplianceCheck() {
@@ -130,6 +133,7 @@ export default function DashboardPage() {
       case 'COMPLIANT': return <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 text-sm font-bold">&#10003;</span>
       case 'NON_COMPLIANT': return <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-500/20 text-red-400 text-sm font-bold">&#10007;</span>
       case 'ATTENTION': return <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 text-sm font-bold">!</span>
+      case 'NOT_VERIFIED': return <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-500/20 text-blue-400 text-sm font-bold">?</span>
       default: return <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-500/20 text-slate-400 text-sm">?</span>
     }
   }
@@ -139,11 +143,13 @@ export default function DashboardPage() {
       'COMPLIANT': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
       'NON_COMPLIANT': 'bg-red-500/10 text-red-400 border-red-500/20',
       'ATTENTION': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      'NOT_VERIFIED': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     }
     const labels: Record<string, string> = {
       'COMPLIANT': 'Compliant',
       'NON_COMPLIANT': 'Non-Compliant',
       'ATTENTION': 'Needs Attention',
+      'NOT_VERIFIED': 'Not Verified',
     }
     return <span className={`px-2.5 py-1 text-xs font-medium rounded-full border ${classes[status] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>{labels[status] || status}</span>
   }
@@ -176,7 +182,7 @@ export default function DashboardPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <span className="text-lg font-bold text-white">Compliance<span className="text-emerald-400">IQ</span></span>
+            <span className="text-lg font-bold text-white">Adira</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-400">{session?.user?.name}</span>
@@ -282,7 +288,7 @@ export default function DashboardPage() {
 
             {/* Summary Cards */}
             {summary && (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
                 <div className="bg-white/5 border border-white/10 rounded-xl p-5 text-center">
                   <div className="text-3xl font-bold text-white mb-1">{summary.score}%</div>
                   <div className="text-xs text-slate-400 uppercase tracking-wider">Compliance Score</div>
@@ -306,6 +312,10 @@ export default function DashboardPage() {
                   <div className="text-3xl font-bold text-amber-400 mb-1">{summary.attention}</div>
                   <div className="text-xs text-amber-400/60 uppercase tracking-wider">Needs Attention</div>
                 </div>
+                <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-5 text-center">
+                  <div className="text-3xl font-bold text-blue-400 mb-1">{summary.notVerified}</div>
+                  <div className="text-xs text-blue-400/60 uppercase tracking-wider">Not Verified</div>
+                </div>
               </div>
             )}
 
@@ -324,6 +334,7 @@ export default function DashboardPage() {
                   <option value="COMPLIANT" className="bg-slate-900">Compliant</option>
                   <option value="NON_COMPLIANT" className="bg-slate-900">Non-Compliant</option>
                   <option value="ATTENTION" className="bg-slate-900">Needs Attention</option>
+                  <option value="NOT_VERIFIED" className="bg-slate-900">Not Verified</option>
                 </select>
               </div>
             )}
