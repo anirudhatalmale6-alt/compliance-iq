@@ -359,7 +359,9 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
   checks.push({
     category: 'MCA',
     checkName: 'Annual Return Filing (MGT-7/MGT-7A)',
-    description: `Annual return for FY ${prevFY} must be filed within 60 days of AGM`,
+    description: lastAGM
+      ? `Annual return for FY ${prevFY} must be filed within 60 days of AGM. Last AGM held: ${lastAGM}`
+      : `Annual return for FY ${prevFY} must be filed within 60 days of AGM`,
     status: mgt7Status,
     severity: 'HIGH',
     action: mgt7Status === 'COMPLIANT'
@@ -385,7 +387,9 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
   checks.push({
     category: 'MCA',
     checkName: 'Financial Statements Filing (AOC-4)',
-    description: `Financial statements for FY ${prevFY} must be filed within 30 days of AGM`,
+    description: fyEnding
+      ? `Financial statements for FY ${prevFY} must be filed within 30 days of AGM. Last FY ending: ${fyEnding}`
+      : `Financial statements for FY ${prevFY} must be filed within 30 days of AGM`,
     status: aoc4Status,
     severity: 'HIGH',
     action: aoc4Status === 'COMPLIANT'
@@ -497,7 +501,9 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
   checks.push({
     category: 'MCA',
     checkName: 'Annual General Meeting (AGM)',
-    description: 'AGM must be held within 6 months from end of financial year (by September 30)',
+    description: lastAGM
+      ? `AGM must be held within 6 months from end of financial year (by September 30). Last AGM: ${lastAGM}`
+      : 'AGM must be held within 6 months from end of financial year (by September 30)',
     status: agmCompliant ? 'COMPLIANT' : agmDate ? 'ATTENTION' : 'NOT_VERIFIED',
     severity: 'HIGH',
     action: agmCompliant

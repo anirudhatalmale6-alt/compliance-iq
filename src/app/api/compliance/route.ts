@@ -5,6 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { generateMCAComplianceChecks, fetchMCAData } from '@/lib/mca-service'
 import { generateGSTComplianceChecks } from '@/lib/gst-service'
 import { fetchGSTData } from '@/lib/gst-service'
+import { fetchToflerViaProxy } from '@/lib/tofler-proxy'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 // Run compliance check for a company
 export async function POST(req: NextRequest) {
@@ -39,21 +43,14 @@ export async function POST(req: NextRequest) {
   if (company.cin) {
     let toflerData: any = null
 
-    // Try Edge enrichment API (runs on Cloudflare, bypasses Tofler's AWS IP block)
+    // Fetch Tofler data directly via proxy (no self-call)
     try {
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXTAUTH_URL || 'http://localhost:3060'
-      const enrichRes = await fetch(`${baseUrl}/api/enrich`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cin: company.cin }),
-      })
-      if (enrichRes.ok) {
-        toflerData = await enrichRes.json()
+      toflerData = await fetchToflerViaProxy(company.cin)
+      if (toflerData) {
+        console.log('Tofler proxy success:', toflerData.name, 'AGM:', toflerData.lastAGMDate, 'FY:', toflerData.fyEndingDate)
       }
     } catch (e) {
-      console.log('Edge enrichment failed, trying Node.js fetch...')
+      console.log('Tofler proxy failed, trying Node.js fetch...')
     }
 
     // Fallback to Node.js fetch (Tofler + data.gov.in + CIN decoder)
