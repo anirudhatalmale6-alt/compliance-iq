@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   // Create admin user if not exists
   const existing = await prisma.user.findUnique({ where: { email: 'admin@complianceiq.com' } })
