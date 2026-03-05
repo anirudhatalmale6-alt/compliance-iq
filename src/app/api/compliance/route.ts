@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateMCAComplianceChecks } from '@/lib/mca-service'
+import { generateMCAComplianceChecks, fetchMCAData } from '@/lib/mca-service'
 import { generateGSTComplianceChecks } from '@/lib/gst-service'
 import { fetchGSTData } from '@/lib/gst-service'
 
@@ -34,6 +34,50 @@ export async function POST(req: NextRequest) {
   })
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
 
+  // Fetch fresh MCA data from Tofler if CIN exists
+  let enrichedCompany: any = { ...company }
+  if (company.cin) {
+    const mcaData = await fetchMCAData(company.cin)
+    if (mcaData) {
+      enrichedCompany = {
+        ...company,
+        companyStatus: mcaData.companyStatus || company.companyStatus,
+        companyType: mcaData.companyType || company.companyType,
+        registeredOffice: mcaData.registeredOffice || company.registeredOffice,
+        state: mcaData.state || company.state,
+        dateOfIncorporation: mcaData.dateOfIncorporation || company.dateOfIncorporation,
+        lastAGMDate: mcaData.lastAGMDate,
+        lastBalanceSheetDate: mcaData.lastBalanceSheetDate,
+        directorCount: mcaData.directorCount || mcaData.directors?.length || 0,
+        directors: mcaData.directors || [],
+        name: mcaData.name || company.name,
+      }
+      // Update company record with fresh data
+      await prisma.company.update({
+        where: { id: companyId },
+        data: {
+          name: mcaData.name || company.name,
+          companyStatus: mcaData.companyStatus || company.companyStatus,
+          companyType: mcaData.companyType || company.companyType,
+          registeredOffice: mcaData.registeredOffice || company.registeredOffice,
+          state: mcaData.state || company.state,
+        },
+      })
+      // Save directors if we got new ones
+      if (mcaData.directors?.length && company.directors.length === 0) {
+        await prisma.director.createMany({
+          data: mcaData.directors.map(d => ({
+            companyId: company.id,
+            name: d.name,
+            din: d.din || null,
+            designation: d.designation || null,
+            dateOfAppointment: d.dateOfAppointment ? new Date(d.dateOfAppointment) : null,
+          })),
+        })
+      }
+    }
+  }
+
   // Fetch fresh GST data if GSTIN exists
   let gstData = null
   if (company.gstin) {
@@ -41,7 +85,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Generate compliance checks
-  const mcaChecks = generateMCAComplianceChecks(company, company.mcaFilings, company.directors)
+  const mcaChecks = generateMCAComplianceChecks(enrichedCompany, company.mcaFilings, enrichedCompany.directors || company.directors)
   const gstChecks = generateGSTComplianceChecks(gstData, company.gstReturns)
   const allChecks = [...mcaChecks, ...gstChecks]
 
