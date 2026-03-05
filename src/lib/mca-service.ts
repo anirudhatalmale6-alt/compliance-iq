@@ -340,6 +340,12 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
   const hasRecentFinancials = company.lastBalanceSheetDate ? isDateWithinMonths(company.lastBalanceSheetDate, 18) : false
   const isEstablished = isActiveCompany && directorCount >= 2
 
+  // Dates for "last record" display
+  const lastAGM = company.lastAGMDate || null
+  const fyEnding = company.fyEndingDate || company.lastBalanceSheetDate || null
+  const lastAGMLabel = lastAGM ? ` Last AGM: ${lastAGM}.` : ''
+  const fyEndingLabel = fyEnding ? ` Last FY ending: ${fyEnding}.` : ''
+
   // 2. Annual Return (MGT-7/MGT-7A) Filing
   const mgt7Filed = filings.some((f: any) =>
     (f.formType === 'MGT-7' || f.formType === 'MGT-7A') &&
@@ -357,10 +363,10 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     status: mgt7Status,
     severity: 'HIGH',
     action: mgt7Status === 'COMPLIANT'
-      ? 'Annual return filing appears up to date based on available records.'
+      ? `Annual return filing appears up to date.${lastAGMLabel}`
       : mgt7Status === 'NOT_VERIFIED'
         ? 'Filing data not available from public sources. Verify on MCA portal or your CS/CA records.'
-        : `File Form MGT-7 (or MGT-7A for OPC/Small companies) for FY ${prevFY}. Due within 60 days of AGM date. Late filing: ₹100/day.`,
+        : `File Form MGT-7 (or MGT-7A for OPC/Small companies) for FY ${prevFY}. Due within 60 days of AGM date.${lastAGMLabel} Late filing: ₹100/day.`,
     penalty: 'Late filing: ₹100 per day of delay. Non-filing: up to ₹5,00,000 penalty.',
     reference: 'Companies Act 2013, Section 92(4)',
     deadline: new Date(currentYear, 10, 29),
@@ -383,10 +389,10 @@ export function generateMCAComplianceChecks(company: any, filings: any[], direct
     status: aoc4Status,
     severity: 'HIGH',
     action: aoc4Status === 'COMPLIANT'
-      ? 'Financial statements filing appears up to date based on available records.'
+      ? `Financial statements filing appears up to date.${fyEndingLabel}`
       : aoc4Status === 'NOT_VERIFIED'
         ? 'Filing data not available from public sources. Verify on MCA portal or your CS/CA records.'
-        : `File Form AOC-4 for FY ${prevFY}. Due within 30 days of AGM.`,
+        : `File Form AOC-4 for FY ${prevFY}. Due within 30 days of AGM.${fyEndingLabel}`,
     penalty: 'Late filing: ₹100 per day. Company penalty up to ₹5,00,000, Officer penalty up to ₹1,00,000.',
     reference: 'Companies Act 2013, Section 137',
     deadline: new Date(currentYear, 10, 29),

@@ -34,46 +34,76 @@ export async function POST(req: NextRequest) {
   })
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
 
-  // Fetch fresh MCA data from Tofler if CIN exists
+  // Fetch fresh data: try Edge enrichment API first (Tofler via Cloudflare), then fallback to Node.js fetch
   let enrichedCompany: any = { ...company }
   if (company.cin) {
-    const mcaData = await fetchMCAData(company.cin, company.name)
-    if (mcaData) {
-      enrichedCompany = {
-        ...company,
-        companyStatus: mcaData.companyStatus || company.companyStatus,
-        companyType: mcaData.companyType || company.companyType,
-        registeredOffice: mcaData.registeredOffice || company.registeredOffice,
-        state: mcaData.state || company.state,
-        dateOfIncorporation: mcaData.dateOfIncorporation || company.dateOfIncorporation,
-        lastAGMDate: mcaData.lastAGMDate,
-        lastBalanceSheetDate: mcaData.lastBalanceSheetDate,
-        directorCount: mcaData.directorCount || mcaData.directors?.length || 0,
-        directors: mcaData.directors || [],
-        name: mcaData.name || company.name,
-      }
-      // Update company record with fresh data
-      await prisma.company.update({
-        where: { id: companyId },
-        data: {
-          name: mcaData.name || company.name,
-          companyStatus: mcaData.companyStatus || company.companyStatus,
-          companyType: mcaData.companyType || company.companyType,
-          registeredOffice: mcaData.registeredOffice || company.registeredOffice,
-          state: mcaData.state || company.state,
-        },
+    let toflerData: any = null
+
+    // Try Edge enrichment API (runs on Cloudflare, bypasses Tofler's AWS IP block)
+    try {
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NEXTAUTH_URL || 'http://localhost:3060'
+      const enrichRes = await fetch(`${baseUrl}/api/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cin: company.cin }),
       })
-      // Save directors if we got new ones
-      if (mcaData.directors?.length && company.directors.length === 0) {
-        await prisma.director.createMany({
-          data: mcaData.directors.map(d => ({
-            companyId: company.id,
-            name: d.name,
-            din: d.din || null,
-            designation: d.designation || null,
-            dateOfAppointment: d.dateOfAppointment ? new Date(d.dateOfAppointment) : null,
-          })),
-        })
+      if (enrichRes.ok) {
+        toflerData = await enrichRes.json()
+      }
+    } catch (e) {
+      console.log('Edge enrichment failed, trying Node.js fetch...')
+    }
+
+    // Fallback to Node.js fetch (Tofler + data.gov.in + CIN decoder)
+    const mcaData = await fetchMCAData(company.cin, company.name)
+
+    // Merge: prefer Tofler edge data, then Node.js fetch, then existing DB data
+    enrichedCompany = {
+      ...company,
+      companyStatus: toflerData?.status || mcaData?.companyStatus || company.companyStatus,
+      companyType: toflerData?.companyType || mcaData?.companyType || company.companyType,
+      registeredOffice: toflerData?.registeredOffice || mcaData?.registeredOffice || company.registeredOffice,
+      state: toflerData?.state || mcaData?.state || company.state,
+      dateOfIncorporation: toflerData?.dateOfIncorporation || mcaData?.dateOfIncorporation || company.dateOfIncorporation,
+      lastAGMDate: toflerData?.lastAGMDate || mcaData?.lastAGMDate,
+      lastBalanceSheetDate: toflerData?.lastBalanceSheetDate || mcaData?.lastBalanceSheetDate,
+      fyEndingDate: toflerData?.fyEndingDate,
+      directorCount: toflerData?.directorCount || mcaData?.directorCount || mcaData?.directors?.length || 0,
+      directors: mcaData?.directors || [],
+      name: toflerData?.name || mcaData?.name || company.name,
+    }
+
+    // Update company record with fresh data
+    const updateData: any = {}
+    if (enrichedCompany.name && enrichedCompany.name !== company.name) updateData.name = enrichedCompany.name
+    if (enrichedCompany.companyStatus && enrichedCompany.companyStatus !== company.companyStatus) updateData.companyStatus = enrichedCompany.companyStatus
+    if (enrichedCompany.companyType && enrichedCompany.companyType !== company.companyType) updateData.companyType = enrichedCompany.companyType
+    if (enrichedCompany.registeredOffice && !company.registeredOffice) updateData.registeredOffice = enrichedCompany.registeredOffice
+    if (enrichedCompany.state && enrichedCompany.state !== company.state) updateData.state = enrichedCompany.state
+    if (Object.keys(updateData).length > 0) {
+      await prisma.company.update({ where: { id: companyId }, data: updateData })
+    }
+
+    // Save directors if we got new ones
+    const dirNames = toflerData?.directorNames || mcaData?.directors?.map((d: any) => d.name) || []
+    if (dirNames.length > 0 && company.directors.length === 0) {
+      await prisma.director.createMany({
+        data: dirNames.map((name: string) => ({
+          companyId: company.id,
+          name,
+          designation: 'Director',
+        })),
+      })
+      const remaining = (enrichedCompany.directorCount || 0) - dirNames.length
+      if (remaining > 0) {
+        const extras = Array.from({ length: remaining }, (_, i) => ({
+          companyId: company.id,
+          name: `Director ${dirNames.length + i + 1}`,
+          designation: 'Director' as string,
+        }))
+        await prisma.director.createMany({ data: extras })
       }
     }
   }

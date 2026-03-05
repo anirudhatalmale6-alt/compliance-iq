@@ -112,8 +112,34 @@ export default function DashboardPage() {
       body: JSON.stringify(addForm),
     })
     const data = await res.json()
+    if (!res.ok) { setAddError(data.error); setAddLoading(false); return }
+
+    // Enrich with real-time Tofler data via Edge Runtime
+    if (addForm.cin && data.id) {
+      try {
+        const enrichRes = await fetch('/api/enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cin: addForm.cin }),
+        })
+        if (enrichRes.ok) {
+          const toflerData = await enrichRes.json()
+          if (toflerData.name) {
+            // Update company with real data
+            await fetch('/api/company/enrich', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ companyId: data.id, toflerData }),
+            })
+          }
+        }
+      } catch (e) {
+        // Enrichment is best-effort, company still created with CIN data
+        console.log('Edge enrichment failed, using CIN-decoded data')
+      }
+    }
+
     setAddLoading(false)
-    if (!res.ok) { setAddError(data.error); return }
     setShowAddCompany(false)
     setAddForm({ cin: '', gstin: '', name: '' })
     fetchCompanies()
